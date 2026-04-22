@@ -8,15 +8,17 @@ import { openCodeAdapter } from "./adapters/opencode/adapter";
 import { openClawAdapter } from "./adapters/openclaw/adapter";
 import { createServer } from "./server/mcp";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { startSSEServer } from "./server/transport/sse";
 import { runSync } from "./core/sync";
 
 const USAGE = `synapse v${VERSION}
 
 Usage:
-  synapse serve --stdio   Start MCP server over stdio
-  synapse sync [--source <name>]  Run sync and exit
-  synapse --version       Print version
-  synapse --help          Show this help`;
+  synapse serve --stdio              Start MCP server over stdio
+  synapse serve --sse [--port 7099]  Start MCP server over SSE (HTTP)
+  synapse sync [--source <name>]     Run sync and exit
+  synapse --version                  Print version
+  synapse --help                     Show this help`;
 
 async function main() {
 	const args = process.argv.slice(2);
@@ -33,17 +35,28 @@ async function main() {
 	}
 
 	if (command === "serve") {
-		if (!args.includes("--stdio")) {
-			console.error("Error: 'serve' requires --stdio flag");
+		const useSSE = args.includes("--sse");
+		const useStdio = args.includes("--stdio");
+
+		if (!useSSE && !useStdio) {
+			console.error("Error: 'serve' requires --stdio or --sse flag");
 			process.exit(1);
 		}
+
 		const db = openDatabase();
 		runMigrations(db);
 		const cursorState = await loadCursors();
 		const adapters = [claudeCodeAdapter, openCodeAdapter, openClawAdapter];
 		const server = createServer(db, adapters, cursorState);
-		const transport = new StdioServerTransport();
-		await server.connect(transport);
+
+		if (useSSE) {
+			const portIdx = args.indexOf("--port");
+			const port = portIdx !== -1 ? Number(args[portIdx + 1]) : undefined;
+			await startSSEServer(server, port);
+		} else {
+			const transport = new StdioServerTransport();
+			await server.connect(transport);
+		}
 		return;
 	}
 

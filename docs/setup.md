@@ -25,7 +25,9 @@ This scans `~/.claude/projects/` for JSONL session files and indexes them into `
 
 ## MCP Client Configuration
 
-### Claude Code
+### Stdio (default — single client)
+
+#### Claude Code
 
 Add to `~/.claude/mcp.json`:
 
@@ -63,6 +65,27 @@ mcpServers:
       - synapse
       - serve
       - --stdio
+```
+
+### SSE (multi-client sharing)
+
+Start the SSE server:
+
+```bash
+synapse serve --sse              # default port 7099
+synapse serve --sse --port 8080  # custom port
+```
+
+Then point MCP clients at the SSE endpoint:
+
+```json
+{
+  "mcpServers": {
+    "synapse": {
+      "url": "http://localhost:7099/sse"
+    }
+  }
+}
 ```
 
 ## Usage Examples
