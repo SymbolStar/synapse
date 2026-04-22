@@ -56,13 +56,24 @@ function clampLimit(limit?: number): number {
 	return Math.max(1, Math.min(n, 100));
 }
 
+const FTS_OPERATORS = new Set(["AND", "OR", "NOT", "NEAR"]);
+
+export function buildFtsQuery(raw: string): string {
+	const sanitized = raw.replace(/[""''()]/g, "");
+	return sanitized
+		.split(/\s+/)
+		.filter((w) => w.length > 0)
+		.map((w) => (FTS_OPERATORS.has(w) ? w : `${w}*`))
+		.join(" ");
+}
+
 export function search(db: Database, filters: SearchFilters): SearchResult[] {
 	const params: unknown[] = [];
 	const conditions: string[] = [];
 	let paramIdx = 1;
 
 	conditions.push(`messages_fts MATCH ?${paramIdx}`);
-	params.push(filters.query);
+	params.push(buildFtsQuery(filters.query));
 	paramIdx++;
 
 	if (filters.source) {
@@ -278,5 +289,40 @@ export function getProjectSummary(
 		totalSessions: countRow.total,
 		bySource,
 		recentSessions: recentRows.map(rowToSummary),
+	};
+}
+
+export interface DbStats {
+	totalSessions: number;
+	totalMessages: number;
+	dbSizeBytes: number;
+	bySource: Record<string, number>;
+}
+
+export function getStats(db: Database): DbStats {
+	const sess = db.query("SELECT COUNT(*) AS c FROM sessions").get() as any;
+	const msgs = db.query("SELECT COUNT(*) AS c FROM messages").get() as any;
+
+	const bySourceRows = db
+		.query("SELECT source, COUNT(*) AS cnt FROM sessions GROUP BY source")
+		.all() as any[];
+	const bySource: Record<string, number> = {};
+	for (const r of bySourceRows) bySource[r.source] = r.cnt;
+
+	let dbSizeBytes = 0;
+	try {
+		const sizeRow = db
+			.query("SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()")
+			.get() as any;
+		dbSizeBytes = sizeRow?.size ?? 0;
+	} catch {
+		dbSizeBytes = 0;
+	}
+
+	return {
+		totalSessions: sess.c,
+		totalMessages: msgs.c,
+		dbSizeBytes,
+		bySource,
 	};
 }
