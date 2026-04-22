@@ -67,7 +67,7 @@ async function main() {
 		if (useSSE) {
 			const portIdx = args.indexOf("--port");
 			const port = portIdx !== -1 ? Number(args[portIdx + 1]) : undefined;
-			await startSSEServer(server, port);
+			await startSSEServer(server, port, db);
 		} else {
 			const transport = new StdioServerTransport();
 			await server.connect(transport);
