@@ -3,8 +3,13 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Database } from "bun:sqlite";
 import { handleApiRequest } from "../../web/api";
-import { renderDashboard, renderPlaceholder } from "../../web/pages";
-import { getStats, listSessions } from "../../core/search";
+import {
+	renderDashboard,
+	renderSearchPage,
+	renderSessionDetailPage,
+	renderSessionsPage,
+} from "../../web/pages";
+import { getStats, listSessions, getSessionDetail, search } from "../../core/search";
 
 const DEFAULT_PORT = 7099;
 
@@ -61,18 +66,43 @@ export async function startSSEServer(
 					return;
 				}
 				if (url.pathname === "/search") {
+					const q = url.searchParams.get("q") ?? undefined;
+					const source = url.searchParams.get("source") ?? undefined;
+					const srcFilter = source && source !== "all" ? source : undefined;
+					let results: import("../../types").SearchResult[] | undefined;
+					if (q) {
+						results = search(db, {
+							query: q,
+							source: srcFilter as any,
+							limit: 50,
+						});
+					}
 					res.writeHead(200, { "Content-Type": "text/html" });
-					res.end(renderPlaceholder("Search"));
+					res.end(renderSearchPage(results, q, source));
 					return;
 				}
 				if (url.pathname === "/sessions") {
+					const source = url.searchParams.get("source") ?? undefined;
+					const project = url.searchParams.get("project") ?? undefined;
+					const srcFilter = source && source !== "all" ? source : undefined;
+					const sessions = listSessions(db, {
+						source: srcFilter as any,
+						project: project || undefined,
+						limit: 50,
+					});
 					res.writeHead(200, { "Content-Type": "text/html" });
-					res.end(renderPlaceholder("Sessions"));
+					res.end(renderSessionsPage(sessions, source, project));
 					return;
 				}
 				if (url.pathname.startsWith("/session/")) {
+					const id = url.pathname.slice("/session/".length);
+					const detail = getSessionDetail(db, id);
+					if (!detail) {
+						res.writeHead(404).end("Session not found");
+						return;
+					}
 					res.writeHead(200, { "Content-Type": "text/html" });
-					res.end(renderPlaceholder("Session Detail"));
+					res.end(renderSessionDetailPage(detail));
 					return;
 				}
 			}

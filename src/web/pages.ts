@@ -1,4 +1,5 @@
-import type { DbStats, SessionSummary } from "../core/search";
+import type { DbStats, SessionSummary, SessionDetail } from "../core/search";
+import type { SearchResult } from "../types";
 
 function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
@@ -12,6 +13,16 @@ function escapeHtml(s: string): string {
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;");
+}
+
+function sourceBadge(source: string): string {
+	const colors: Record<string, string> = {
+		"claude-code": "bg-yellow-600",
+		opencode: "bg-blue-600",
+		openclaw: "bg-green-600",
+	};
+	const bg = colors[source] ?? "bg-gray-600";
+	return `<span class="px-2 py-0.5 rounded text-xs text-white ${bg}">${escapeHtml(source)}</span>`;
 }
 
 function renderLayout(title: string, content: string): string {
@@ -50,7 +61,7 @@ function renderSessionRow(s: SessionSummary): string {
 	const title = s.title || s.projectName || "Untitled";
 	return `<tr class="border-b border-gray-700 hover:bg-gray-800">
 <td class="py-2 px-3"><a href="/session/${escapeHtml(s.id)}" class="text-blue-400 hover:underline">${escapeHtml(title)}</a></td>
-<td class="py-2 px-3"><span class="px-2 py-0.5 bg-gray-700 rounded text-xs">${escapeHtml(s.source)}</span></td>
+<td class="py-2 px-3">${sourceBadge(s.source)}</td>
 <td class="py-2 px-3 text-gray-400">${escapeHtml(date)}</td>
 <td class="py-2 px-3 text-right text-gray-400">${s.messageCount}</td>
 </tr>`;
@@ -91,10 +102,150 @@ ${renderStatCard("DB Size", formatBytes(stats.dbSizeBytes))}
 	);
 }
 
-export function renderPlaceholder(title: string): string {
+const SOURCE_OPTIONS = ["all", "claude-code", "opencode", "openclaw"];
+
+export function renderSearchPage(
+	results?: SearchResult[],
+	query?: string,
+	source?: string,
+): string {
+	const sourceOpts = SOURCE_OPTIONS.map(
+		(s) =>
+			`<option value="${s}"${source === s ? " selected" : ""}>${escapeHtml(s)}</option>`,
+	).join("");
+
+	const form = `<form method="GET" action="/search" class="flex gap-3 mb-6">
+<input type="text" name="q" value="${escapeHtml(query ?? "")}" placeholder="Search messages..." class="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white">
+<select name="source" class="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white">${sourceOpts}</select>
+<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Search</button>
+</form>`;
+
+	let body: string;
+	if (results === undefined) {
+		body = "";
+	} else if (results.length === 0) {
+		body = '<p class="text-gray-400">No results found.</p>';
+	} else {
+		const rows = results
+			.map((r) => {
+				const title = r.title || r.projectName || "Untitled";
+				const snippet = r.snippet
+					.replace(/>>>/g, '<mark class="bg-yellow-700 text-white">')
+					.replace(/<<</g, "</mark>");
+				const ts = r.timestamp ? new Date(r.timestamp).toLocaleString() : "";
+				return `<div class="bg-gray-800 border border-gray-700 rounded p-4 mb-3">
+<div class="flex items-center gap-2 mb-1">${sourceBadge(r.source)}
+<a href="/session/${escapeHtml(r.sessionKey)}" class="text-blue-400 hover:underline font-medium">${escapeHtml(title)}</a>
+<span class="text-gray-500 text-xs ml-auto">${escapeHtml(ts)}</span></div>
+<p class="text-sm text-gray-300" style="white-space:pre-wrap">${snippet}</p>
+</div>`;
+			})
+			.join("");
+		body = `<p class="text-gray-400 mb-3">${results.length} result${results.length === 1 ? "" : "s"} found</p>${rows}`;
+	}
+
+	return renderLayout(
+		"Search",
+		`<h1 class="text-2xl font-bold text-white mb-6">Search</h1>${form}${body}`,
+	);
+}
+
+export function renderSessionDetailPage(detail: SessionDetail): string {
+	const title = detail.title || detail.projectName || "Untitled";
+	const started = detail.startedAt ? new Date(detail.startedAt).toLocaleString() : "—";
+	const ended = detail.endedAt ? new Date(detail.endedAt).toLocaleString() : "—";
+	const dur = detail.durationSeconds
+		? `${Math.round(detail.durationSeconds / 60)} min`
+		: "—";
+	const tokens = detail.totalInputTokens + detail.totalOutputTokens;
+
+	const header = `<div class="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
+<div class="flex items-center gap-3 mb-3">
+<h1 class="text-xl font-bold text-white">${escapeHtml(title)}</h1>
+${sourceBadge(detail.source)}
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+<div><span class="text-gray-400">Project:</span> <span class="text-white">${escapeHtml(detail.projectName ?? "—")}</span></div>
+<div><span class="text-gray-400">Started:</span> <span class="text-white">${escapeHtml(started)}</span></div>
+<div><span class="text-gray-400">Ended:</span> <span class="text-white">${escapeHtml(ended)}</span></div>
+<div><span class="text-gray-400">Duration:</span> <span class="text-white">${escapeHtml(dur)}</span></div>
+<div><span class="text-gray-400">Messages:</span> <span class="text-white">${detail.messageCount}</span></div>
+<div><span class="text-gray-400">Tokens:</span> <span class="text-white">${tokens.toLocaleString()}</span></div>
+</div>
+</div>`;
+
+	const msgs = detail.messages
+		.map((m) => {
+			const isUser = m.role === "user";
+			const isTool = m.role === "tool";
+			const align = isUser ? "ml-auto" : "mr-auto";
+			const bg = isUser ? "bg-blue-900" : isTool ? "bg-yellow-900" : "bg-gray-700";
+			const maxW = "max-w-3xl";
+			const toolTag = isTool && m.toolName
+				? `<span class="px-2 py-0.5 bg-yellow-700 rounded text-xs text-white mb-1 inline-block">${escapeHtml(m.toolName)}</span><br>`
+				: "";
+			const ts = m.timestamp ? `<div class="text-xs text-gray-500 mt-1">${escapeHtml(new Date(m.timestamp).toLocaleString())}</div>` : "";
+			return `<div class="${align} ${maxW} ${bg} rounded-lg p-3 mb-2">
+${toolTag}<div class="text-sm text-gray-200" style="white-space:pre-wrap">${escapeHtml(m.content)}</div>${ts}
+</div>`;
+		})
+		.join("");
+
+	const scrollBtn = `<a href="#" onclick="window.scrollTo(0,0);return false" class="fixed bottom-6 right-6 bg-gray-700 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-gray-600">&uarr;</a>`;
+
 	return renderLayout(
 		title,
-		`<h1 class="text-2xl font-bold text-white mb-4">${escapeHtml(title)}</h1>
-<p class="text-gray-400">Coming soon.</p>`,
+		`${header}<div class="space-y-1">${msgs}</div>${scrollBtn}`,
+	);
+}
+
+export function renderSessionsPage(
+	sessions: SessionSummary[],
+	source?: string,
+	project?: string,
+): string {
+	const sourceOpts = SOURCE_OPTIONS.map(
+		(s) =>
+			`<option value="${s}"${source === s ? " selected" : ""}>${escapeHtml(s)}</option>`,
+	).join("");
+
+	const filterBar = `<form method="GET" action="/sessions" class="flex gap-3 mb-6">
+<select name="source" class="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white">${sourceOpts}</select>
+<input type="text" name="project" value="${escapeHtml(project ?? "")}" placeholder="Filter by project..." class="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white">
+<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Filter</button>
+</form>`;
+
+	let table: string;
+	if (sessions.length === 0) {
+		table = '<p class="text-gray-400">No sessions found.</p>';
+	} else {
+		const rows = sessions
+			.map((s) => {
+				const title = s.title || s.projectName || "Untitled";
+				const date = s.startedAt ? new Date(s.startedAt).toLocaleString() : "—";
+				const tokens = s.totalInputTokens + s.totalOutputTokens;
+				return `<tr class="border-b border-gray-700 hover:bg-gray-800">
+<td class="py-2 px-3"><a href="/session/${escapeHtml(s.id)}" class="text-blue-400 hover:underline">${escapeHtml(title)}</a></td>
+<td class="py-2 px-3">${sourceBadge(s.source)}</td>
+<td class="py-2 px-3 text-gray-400">${escapeHtml(s.projectName ?? "—")}</td>
+<td class="py-2 px-3 text-right text-gray-400">${s.messageCount}</td>
+<td class="py-2 px-3 text-right text-gray-400">${tokens.toLocaleString()}</td>
+<td class="py-2 px-3 text-gray-400">${escapeHtml(date)}</td>
+</tr>`;
+			})
+			.join("");
+		table = `<table class="w-full text-sm">
+<thead><tr class="text-left text-gray-400 border-b border-gray-600">
+<th class="py-2 px-3">Session</th><th class="py-2 px-3">Source</th>
+<th class="py-2 px-3">Project</th><th class="py-2 px-3 text-right">Messages</th>
+<th class="py-2 px-3 text-right">Tokens</th><th class="py-2 px-3">Date</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>`;
+	}
+
+	return renderLayout(
+		"Sessions",
+		`<h1 class="text-2xl font-bold text-white mb-6">Sessions</h1>${filterBar}${table}`,
 	);
 }
