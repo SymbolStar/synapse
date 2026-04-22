@@ -9,21 +9,22 @@
 
 Synapse is a local MCP server that indexes conversations from Claude Code, OpenCode, OpenClaw, and other AI coding tools into a single SQLite database — letting any MCP client search and reuse past sessions.
 
-## Features
-
-- Full-text search across all AI coding history
-- Cross-tool memory: what you solved in Claude Code is available in OpenCode
-- Local-first: your data never leaves your machine
-- Incremental sync with file fingerprinting
-
 ## Quick Start
 
 ```bash
+git clone https://github.com/anthropics/synapse.git
+cd synapse
 bun install
-bun run dev -- serve --stdio
+bun link
+
+# Index existing sessions
+synapse sync
+
+# Start MCP server
+synapse serve --stdio
 ```
 
-Configure in your MCP client (e.g. `~/.claude/mcp.json`):
+Add to `~/.claude/mcp.json`:
 
 ```json
 {
@@ -35,3 +36,61 @@ Configure in your MCP client (e.g. `~/.claude/mcp.json`):
   }
 }
 ```
+
+See [docs/setup.md](docs/setup.md) for OpenCode and OpenClaw configuration.
+
+## Features
+
+- **Full-text search** across all AI coding history (SQLite FTS5)
+- **Cross-tool memory** — what you solved in Claude Code is available in OpenCode
+- **Local-first** — your data never leaves your machine
+- **Incremental sync** with file fingerprinting (inode + mtime + size)
+- **MCP protocol** — works with any MCP-compatible client
+
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `synapse_search` | Full-text search across indexed sessions |
+| `synapse_session_list` | List sessions with optional filters (source, project, date) |
+| `synapse_session_detail` | Retrieve full conversation for a session |
+| `synapse_sync` | Trigger incremental sync from all sources |
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ Claude Code  │     │  OpenCode   │     │  OpenClaw   │
+│   .jsonl     │     │   .jsonl    │     │   .jsonl    │
+└──────┬───────┘     └──────┬──────┘     └──────┬──────┘
+       │                    │                    │
+       └────────────┬───────┘────────────────────┘
+                    ▼
+           ┌────────────────┐
+           │   Adapters     │  discover → parse → canonical
+           └───────┬────────┘
+                   ▼
+           ┌────────────────┐
+           │   Indexer      │  upsert projects/sessions/messages
+           └───────┬────────┘
+                   ▼
+           ┌────────────────┐
+           │  SQLite + FTS5 │  synapse.db
+           └───────┬────────┘
+                   ▼
+           ┌────────────────┐
+           │  MCP Server    │  stdio transport
+           └────────────────┘
+```
+
+## Contributing
+
+```bash
+bun install
+bun test
+bun run lint
+```
+
+## License
+
+MIT
