@@ -1,12 +1,17 @@
 import http from "node:http";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Database } from "bun:sqlite";
+import { handleApiRequest } from "../../web/api";
+import { renderDashboard, renderPlaceholder } from "../../web/pages";
+import { getStats, listSessions } from "../../core/search";
 
 const DEFAULT_PORT = 7099;
 
 export async function startSSEServer(
 	server: McpServer,
 	port = DEFAULT_PORT,
+	db?: Database,
 ): Promise<http.Server> {
 	const sessions = new Map<string, SSEServerTransport>();
 
@@ -39,6 +44,38 @@ export async function startSSEServer(
 			}
 			await transport.handlePostMessage(req, res);
 			return;
+		}
+
+		// Web dashboard and API (require db)
+		if (db) {
+			// REST API
+			if (handleApiRequest(db, req, res, url)) return;
+
+			// Web pages
+			if (req.method === "GET") {
+				if (url.pathname === "/") {
+					const stats = getStats(db);
+					const recent = listSessions(db, { limit: 10 });
+					res.writeHead(200, { "Content-Type": "text/html" });
+					res.end(renderDashboard(stats, recent));
+					return;
+				}
+				if (url.pathname === "/search") {
+					res.writeHead(200, { "Content-Type": "text/html" });
+					res.end(renderPlaceholder("Search"));
+					return;
+				}
+				if (url.pathname === "/sessions") {
+					res.writeHead(200, { "Content-Type": "text/html" });
+					res.end(renderPlaceholder("Sessions"));
+					return;
+				}
+				if (url.pathname.startsWith("/session/")) {
+					res.writeHead(200, { "Content-Type": "text/html" });
+					res.end(renderPlaceholder("Session Detail"));
+					return;
+				}
+			}
 		}
 
 		res.writeHead(404).end("Not found");
