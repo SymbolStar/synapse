@@ -4,6 +4,8 @@ import { openDatabase } from "./core/db";
 import { runMigrations } from "./core/migrate";
 import { loadCursors, saveCursors } from "./core/cursor";
 import { claudeCodeAdapter } from "./adapters/claude-code/adapter";
+import { openCodeAdapter } from "./adapters/opencode/adapter";
+import { openClawAdapter } from "./adapters/openclaw/adapter";
 import { createServer } from "./server/mcp";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { runSync } from "./core/sync";
@@ -38,7 +40,7 @@ async function main() {
 		const db = openDatabase();
 		runMigrations(db);
 		const cursorState = await loadCursors();
-		const adapters = [claudeCodeAdapter];
+		const adapters = [claudeCodeAdapter, openCodeAdapter, openClawAdapter];
 		const server = createServer(db, adapters, cursorState);
 		const transport = new StdioServerTransport();
 		await server.connect(transport);
@@ -52,7 +54,7 @@ async function main() {
 		const db = openDatabase();
 		runMigrations(db);
 		const cursorState = await loadCursors();
-		const adapters = [claudeCodeAdapter];
+		const adapters = [claudeCodeAdapter, openCodeAdapter, openClawAdapter];
 
 		const result = await runSync(db, adapters, cursorState, { source });
 		await saveCursors(cursorState);

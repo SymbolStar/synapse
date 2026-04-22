@@ -6,6 +6,8 @@ import { handleSearch } from "../../src/server/tools/search";
 import { handleSessionList } from "../../src/server/tools/session-list";
 import { handleSessionDetail } from "../../src/server/tools/session-detail";
 import { handleSync } from "../../src/server/tools/sync";
+import { handleRelated } from "../../src/server/tools/related";
+import { handleProjectSummary } from "../../src/server/tools/project-summary";
 import type { ParseResult, CursorState } from "../../src/types";
 import type { SourceAdapter } from "../../src/adapters/types";
 
@@ -186,6 +188,49 @@ describe("MCP tool handlers", () => {
 			const res = await handleSync({}, db, [adapter], cursorState);
 			expect(res.content[0].text).toContain("Sync complete");
 			expect(res.content[0].text).toContain("0 parsed");
+		});
+	});
+
+	describe("handleRelated", () => {
+		test("returns related sessions", () => {
+			const res = handleRelated({ context: "Hello" }, db);
+			expect(res.content[0].text).toContain("sess-1");
+		});
+
+		test("returns no results message", () => {
+			const res = handleRelated({ context: "nonexistent_xyz" }, db);
+			expect(res.content[0].text).toBe("No related sessions found.");
+		});
+
+		test("filters by project", () => {
+			const res = handleRelated(
+				{ context: "Hello OR migration", project: "other-project" },
+				db,
+			);
+			expect(res.content[0].text).toContain("[opencode]");
+			expect(res.content[0].text).not.toContain("[claude-code]");
+		});
+	});
+
+	describe("handleProjectSummary", () => {
+		test("returns summary with sessions", () => {
+			const res = handleProjectSummary({ days: 3650 }, db);
+			expect(res.content[0].text).toContain("Sessions (last 3650 days): 2");
+			expect(res.content[0].text).toContain("claude-code=1");
+			expect(res.content[0].text).toContain("opencode=1");
+		});
+
+		test("filters by project", () => {
+			const res = handleProjectSummary(
+				{ project: "other-project", days: 3650 },
+				db,
+			);
+			expect(res.content[0].text).toContain("Sessions (last 3650 days): 1");
+		});
+
+		test("returns zero when no matches", () => {
+			const res = handleProjectSummary({ project: "no-such-project" }, db);
+			expect(res.content[0].text).toContain("Sessions (last 7 days): 0");
 		});
 	});
 });

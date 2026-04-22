@@ -8,6 +8,8 @@ import { handleSearch } from "./tools/search";
 import { handleSessionList } from "./tools/session-list";
 import { handleSessionDetail } from "./tools/session-detail";
 import { handleSync } from "./tools/sync";
+import { handleRelated } from "./tools/related";
+import { handleProjectSummary } from "./tools/project-summary";
 
 export function createServer(
 	db: Database,
@@ -62,6 +64,27 @@ export function createServer(
 			source: z.string().optional().describe("Only sync this source"),
 		},
 		async (args) => handleSync(args, db, adapters, cursorState),
+	);
+
+	server.tool(
+		"synapse_related",
+		"Find sessions related to a given context string",
+		{
+			context: z.string().describe("Context to find related sessions for"),
+			project: z.string().optional().describe("Filter by project name"),
+			limit: z.number().optional().describe("Max results (default 5)"),
+		},
+		(args) => handleRelated(args, db),
+	);
+
+	server.tool(
+		"synapse_project_summary",
+		"Get a summary of sessions per project over a time window",
+		{
+			project: z.string().optional().describe("Filter by project name"),
+			days: z.number().optional().describe("Lookback window in days (default 7)"),
+		},
+		(args) => handleProjectSummary(args, db),
 	);
 
 	return server;
