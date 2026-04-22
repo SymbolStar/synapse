@@ -57,3 +57,14 @@ END;
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_source ON sessions(source, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, ordinal);
+
+CREATE TABLE IF NOT EXISTS tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(session_id, tag)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag);
+CREATE INDEX IF NOT EXISTS idx_tags_session ON tags(session_id);

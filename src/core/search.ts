@@ -6,6 +6,7 @@ export interface SearchFilters {
 	source?: Source;
 	project?: string;
 	since?: string;
+	tag?: string;
 	limit?: number;
 }
 
@@ -82,6 +83,13 @@ export function search(db: Database, filters: SearchFilters): SearchResult[] {
 		paramIdx++;
 	}
 
+	let tagJoin = "";
+	if (filters.tag) {
+		tagJoin = `JOIN tags t ON t.session_id = s.id AND t.tag = ?${paramIdx}`;
+		params.push(filters.tag);
+		paramIdx++;
+	}
+
 	const limit = clampLimit(filters.limit);
 	params.push(limit);
 
@@ -98,6 +106,7 @@ export function search(db: Database, filters: SearchFilters): SearchResult[] {
 		JOIN messages m ON m.rowid = messages_fts.rowid
 		JOIN sessions s ON m.session_id = s.id
 		LEFT JOIN projects p ON s.project_id = p.id
+		${tagJoin}
 		WHERE ${conditions.join(" AND ")}
 		ORDER BY rank
 		LIMIT ?${paramIdx}

@@ -7,6 +7,7 @@ interface SearchArgs {
 	source?: Source;
 	project?: string;
 	since?: string;
+	tag?: string;
 	limit?: number;
 }
 

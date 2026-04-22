@@ -59,6 +59,7 @@ describe("createServer", () => {
 		expect(names).toContain("synapse_sync");
 		expect(names).toContain("synapse_related");
 		expect(names).toContain("synapse_project_summary");
-		expect(names).toHaveLength(6);
+		expect(names).toContain("synapse_tag");
+		expect(names).toHaveLength(7);
 	});
 });

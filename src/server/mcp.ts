@@ -10,6 +10,7 @@ import { handleSessionDetail } from "./tools/session-detail";
 import { handleSync } from "./tools/sync";
 import { handleRelated } from "./tools/related";
 import { handleProjectSummary } from "./tools/project-summary";
+import { handleTag } from "./tools/tags";
 
 export function createServer(
 	db: Database,
@@ -29,6 +30,7 @@ export function createServer(
 			source: z.enum(["claude-code", "opencode", "openclaw"]).optional().describe("Filter by source"),
 			project: z.string().optional().describe("Filter by project name"),
 			since: z.string().optional().describe("ISO date — only sessions after this date"),
+			tag: z.string().optional().describe("Filter by tag"),
 			limit: z.number().optional().describe("Max results (default 10)"),
 		},
 		(args) => handleSearch(args, db),
@@ -85,6 +87,18 @@ export function createServer(
 			days: z.number().optional().describe("Lookback window in days (default 7)"),
 		},
 		(args) => handleProjectSummary(args, db),
+	);
+
+	server.tool(
+		"synapse_tag",
+		"Manage tags on sessions — add, remove, list, or search by tag",
+		{
+			action: z.enum(["add", "remove", "list", "search"]).describe("Action to perform"),
+			session_id: z.string().optional().describe("Session ID (required for add/remove/list)"),
+			tag: z.string().optional().describe("Tag name (required for add/remove/search)"),
+			limit: z.number().optional().describe("Max results for search (default 10)"),
+		},
+		(args) => handleTag(args, db),
 	);
 
 	return server;
