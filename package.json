@@ -4,6 +4,9 @@
   "description": "MCP server that lets AI coding tools share session memory",
   "type": "module",
   "main": "src/index.ts",
+  "bin": {
+    "synapse": "./src/cli.ts"
+  },
   "scripts": {
     "dev": "bun run src/cli.ts",
     "lint": "biome check .",
