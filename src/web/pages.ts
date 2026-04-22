@@ -1,5 +1,6 @@
 import type { DbStats, SessionSummary, SessionDetail } from "../core/search";
 import type { SearchResult } from "../types";
+import { getParticleScript } from "./particles";
 
 function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
@@ -220,6 +221,8 @@ function renderLayout(title: string, content: string): string {
 <style>${CSS}</style>
 </head>
 <body>
+${getParticleScript()}
+<div style="position:relative;z-index:1">
 <nav class="nav">
 <div class="nav-inner">
 <a href="/" class="nav-brand">Synapse</a>
@@ -232,6 +235,7 @@ function renderLayout(title: string, content: string): string {
 </div>
 </nav>
 ${content}
+</div>
 </body>
 </html>`;
 }
